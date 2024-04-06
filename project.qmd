@@ -1,0 +1,116 @@
+---
+title: "Project"
+format: pdf
+editor: visual
+---
+
+## Import Data and Packages
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+big_tech_stock_prices <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-02-07/big_tech_stock_prices.csv')
+big_tech_companies <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-02-07/big_tech_companies.csv')
+```
+
+## Calculate Daily return Percentages
+
+```{r}
+## CHANGE CALCULATIONS TO GO FROM ADJ CLOSE TO NEXT DAY ADJ CLOSE
+daily = big_tech_stock_prices |> 
+  group_by(stock_symbol) |> 
+  summarize(
+    date = date,
+    daily_percentage = ((adj_close-lag(adj_close))/lag(adj_close))*100,
+    open = open,
+    close = close,
+    adj_close = adj_close
+  )
+head(daily,n=15)
+```
+
+# Analysis 1: Total Closing Returns
+
+## Calculate Total return percentages
+
+```{r}
+total_return <- daily |> 
+  group_by(stock_symbol) |> 
+  summarize(
+    total_percentage = ((last(adj_close) - first(adj_close)) / first(adj_close)) * 100
+  ) |> 
+  arrange(desc(total_percentage))
+head(total_return,n=15)
+```
+
+## Best performing Tech Stock Visualization
+
+```{r}
+total_return |> 
+  mutate(stock_symbol = reorder(stock_symbol,total_percentage)) |> 
+  ggplot(aes(total_percentage,stock_symbol,fill = total_percentage))+
+  geom_col()+
+  xlab("Total Returns as a Percentage")+
+  ylab("Company Stock Ticker")+
+  ggtitle("Best Performing Tech Stocks from January 4th 2010-December 29th 2022")+
+  labs(fill = "Total Percentage")
+```
+
+# Analysis 2: Max Returns
+
+## Maximum Theoretical Performance
+
+```{r}
+growth <- big_tech_stock_prices |> 
+  group_by(stock_symbol) |> 
+  summarize(
+    total_percentage = ((max(high) - min(low)) / min(low)) * 100,
+    highest_high = max(high),
+    high_date = date[which.max(high)],
+    low_date = date[which.min(low)],
+    lowest_low = ifelse(low_date < high_date, min(low), NA)
+  ) |> 
+  arrange(desc(total_percentage))
+head(growth,n=15)
+```
+
+```{r}
+growth |> 
+  mutate(stock_symbol = reorder(stock_symbol,total_percentage)) |> 
+  ggplot(aes(total_percentage,stock_symbol))+
+  geom_col()+
+  xlab("Total Potential Returns as a Percentage")+
+  ylab("Company Stock Ticker")+
+  ggtitle("Best Possible Performance from January 4th 2010-December 29th 2022")
+```
+
+# Analysis 3: Volatility
+
+## Box-Plot
+
+```{r}
+yearly_stats = daily |> 
+  mutate(year= year(date),
+    month = month(date),
+    day = day(date)) |> 
+  group_by(stock_symbol, year) |> 
+  summarize(
+    count = n(),
+    avg = mean(daily_percentage, na.rm = TRUE),
+    volatility = sd(daily_percentage,na.rm = TRUE)
+  ) |> arrange(desc(volatility))
+yearly_stats
+```
+
+```{r}
+ggplot(yearly_stats,aes(stock_symbol,volatility)) + 
+  geom_boxplot()+
+  coord_flip()+
+  xlab("Volatility")+
+  ylab("Stock Ticker")+
+  ggtitle("Volatility of Tech stocks")
+```
+
+```{r}
+yearly_stats |> filter(stock_symbol == "TSLA") |> head(n=15)
+```
